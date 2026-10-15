@@ -1,0 +1,15 @@
+{
+  "name": "srit-mods",
+  "description": "Personal fork of hellosverre/claude-skins.",
+  "owner": {
+    "name": "devwriet",
+    "url": "https://github.com/devwriet"
+  },
+  "plugins": [
+    {
+      "name": "skins",
+      "source": "./",
+      "description": "Fork of claude-skins: tool-kind glyphs, User/Claude(model) chat boxes, per-model reply colors, mocha skin, edit diff card, always-moving spinner."
+    }
+  ]
+}
