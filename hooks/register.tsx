@@ -550,24 +550,15 @@ async function drawMarkdown($: EngineInterface, args: SkinsMarkdownArgs): Promis
   return replyRows({ ...lookOf(ui, active, args.surface), links, isFirstDraw: () => false }, segments, Math.max(20, Math.floor(args.columns)), svg)
 }
 
-// Fork: the model that labels a reply. A subagent's reply carries its own model, found by
-// message id -> agent id (MessageDisplay) -> model (agent.spawn). Anything unknown falls back to
-// the session's current model, so a reply drawn again after `/model` carries the new name.
-const agentModels = new Map<string, string>()
-const messageAgents = new Map<string, string>()
-const KEPT = 500
-
-function remember(map: Map<string, string>, key: string, value: string): void {
-  map.set(key, value)
-
-  if (map.size > KEPT) {
-    map.delete(map.keys().next().value as string)
-  }
-}
+// Fork: the model that labels a reply. Each assistant row carries the model that wrote it
+// (session.append's origin), found again by the row's uuid, which is the reply's render id: a
+// subagent's reply keeps its own model. Anything unknown falls back to the session's current
+// model, so a reply drawn again after `/model` carries the new name.
+const messageModels = new Map<string, string>()
+const KEPT = 1000
 
 async function modelName($: EngineInterface, messageId = ''): Promise<string> {
-  const agent = messageAgents.get(messageId)
-  const own = agent === undefined ? undefined : agentModels.get(agent)
+  const own = messageModels.get(messageId)
 
   if (own !== undefined) {
     return own
@@ -699,6 +690,15 @@ export const register: Register = on => {
   on('session.append', async ($, e, next) => {
     await reloadIfNewSession($)
     const stored = await next(e)
+
+    if (e.origin.kind === 'model') {
+      messageModels.set(stored.uuid ?? e.uuid, e.origin.model)
+
+      if (messageModels.size > KEPT) {
+        messageModels.delete(messageModels.keys().next().value as string)
+      }
+    }
+
     const hasImage = e.door === 'prompt' && e.message.content.some(block => block.type === 'image')
 
     if (hasImage && stored.uuid !== undefined) {
@@ -1080,25 +1080,6 @@ reply width: ${lastColumns} columns`
     }
 
     return { sections: [...result.sections, { id: 'skins:charts', text: CHART_HINT, scope: 'session' as const }, { id: 'skins:tables', text: TABLE_HINT, scope: 'session' as const }] }
-  })
-
-  // Fork: remember which model each subagent runs on, and which agent wrote each message.
-  on('agent.spawn', async ($, e, next) => {
-    const started = await next(e)
-
-    if (started.agentId !== undefined && started.model !== undefined) {
-      remember(agentModels, started.agentId, started.model)
-    }
-
-    return started
-  })
-
-  on('classic.MessageDisplay', async ($, e, next) => {
-    if (e.agent_id !== undefined) {
-      remember(messageAgents, e.message_id, e.agent_id)
-    }
-
-    return next(e)
   })
 
   // A reply keeps Claude Code's own drawing unless it holds a card or markdown the pack draws.
