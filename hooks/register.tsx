@@ -550,9 +550,29 @@ async function drawMarkdown($: EngineInterface, args: SkinsMarkdownArgs): Promis
   return replyRows({ ...lookOf(ui, active, args.surface), links, isFirstDraw: () => false }, segments, Math.max(20, Math.floor(args.columns)), svg)
 }
 
-// Fork: the model that labels a reply. It is the session's current one, so a reply drawn
-// again after `/model` carries the new name.
-async function modelName($: EngineInterface): Promise<string> {
+// Fork: the model that labels a reply. A subagent's reply carries its own model, found by
+// message id -> agent id (MessageDisplay) -> model (agent.spawn). Anything unknown falls back to
+// the session's current model, so a reply drawn again after `/model` carries the new name.
+const agentModels = new Map<string, string>()
+const messageAgents = new Map<string, string>()
+const KEPT = 500
+
+function remember(map: Map<string, string>, key: string, value: string): void {
+  map.set(key, value)
+
+  if (map.size > KEPT) {
+    map.delete(map.keys().next().value as string)
+  }
+}
+
+async function modelName($: EngineInterface, messageId = ''): Promise<string> {
+  const agent = messageAgents.get(messageId)
+  const own = agent === undefined ? undefined : agentModels.get(agent)
+
+  if (own !== undefined) {
+    return own
+  }
+
   try {
     return await $.session.model()
   } catch {
@@ -1062,6 +1082,25 @@ reply width: ${lastColumns} columns`
     return { sections: [...result.sections, { id: 'skins:charts', text: CHART_HINT, scope: 'session' as const }, { id: 'skins:tables', text: TABLE_HINT, scope: 'session' as const }] }
   })
 
+  // Fork: remember which model each subagent runs on, and which agent wrote each message.
+  on('agent.spawn', async ($, e, next) => {
+    const started = await next(e)
+
+    if (started.agentId !== undefined && started.model !== undefined) {
+      remember(agentModels, started.agentId, started.model)
+    }
+
+    return started
+  })
+
+  on('classic.MessageDisplay', async ($, e, next) => {
+    if (e.agent_id !== undefined) {
+      remember(messageAgents, e.message_id, e.agent_id)
+    }
+
+    return next(e)
+  })
+
   // A reply keeps Claude Code's own drawing unless it holds a card or markdown the pack draws.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     const active = await activeSkin($)
@@ -1077,7 +1116,7 @@ reply width: ${lastColumns} columns`
     const isFramed = e.surface === 'terminal' && text.trim() !== ''
 
     if (segments === null) {
-      return isFramed ? replyFrame(lookOf($.ui.resolve(e), active, e.surface), await next(e), await modelName($)) : next(e)
+      return isFramed ? replyFrame(lookOf($.ui.resolve(e), active, e.surface), await next(e), await modelName($, e.requestId)) : next(e)
     }
 
     // Every surface's table names Svg, but the terminal draws it as nothing. As text, tables
@@ -1096,7 +1135,7 @@ reply width: ${lastColumns} columns`
     const columns = (e.viewport?.columns ?? 100) - (isFramed ? REPLY_FRAME_COLUMNS : 0)
     const rows = replyRows(look, segments, columns, svg, segments.length > 1 ? text : undefined)
 
-    return withSettle($, e, isFramed ? replyFrame(look, rows, await modelName($)) : rows)
+    return withSettle($, e, isFramed ? replyFrame(look, rows, await modelName($, e.requestId)) : rows)
   })
 
   // A slash command's output (`/cost`, `/context`, a plugin's) drawn the way a reply is: its
