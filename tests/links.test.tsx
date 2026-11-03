@@ -180,19 +180,33 @@ test('a table copies as markdown or as drawn, and /skin copy off takes the butto
   expect(await bare.find({ type: 'Button' })).toBeUndefined()
 })
 
-test('a reply of several blocks has copy reply, which copies it as written', async ($, on) => {
+test('a reply of several blocks has no whole-reply copy; a code block copies only its contents', async ($, on) => {
   const copied: string[] = []
   stub(on, {}, copied)
   await start($)
   const text = `Here:\n\n${TABLE}\n\nAnd code:\n\n\`\`\`ts\nconst a = 1\n\`\`\``
 
   const ui = await $.ui.mount(reply(text))
-  await ui.press({ key: 'copy-reply' })
-  expect(copied).toEqual([text])
+  expect(await ui.find({ key: 'copy-reply' })).toBeUndefined()
+  await ui.press({ key: 'copy-3' })
+  expect(copied).toEqual(['const a = 1'])
+  await ui.unmount()
+})
+
+test('a long paragraph has its own Copy that copies just its text; a short one has none', async ($, on) => {
+  const copied: string[] = []
+  stub(on, {}, copied)
+  await start($)
+  const long = 'This is a long paragraph about nothing in particular. '.repeat(6).trim()
+
+  const ui = await $.ui.mount(reply(long))
+  await ui.press({ key: 'copy-text-0' })
+  expect(copied).toEqual([long])
   await ui.unmount()
 
-  const single = await $.ui.mount(reply(TABLE, 'terminal', 'm5'))
-  expect(await single.find({ key: 'copy-reply' })).toBeUndefined()
+  const short = await $.ui.mount(reply('A short line.'))
+  expect(await short.find({ key: 'copy-text-0' })).toBeUndefined()
+  await short.unmount()
 })
 
 test('long code and tables fold behind ▾ N more on the terminal; fold off shows them whole', async ($, on) => {

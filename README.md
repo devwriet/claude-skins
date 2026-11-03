@@ -125,7 +125,7 @@ Drawn by the mod's own card code (`scripts/previews.ts`), not screenshots.
 | Side by side | Two or more tables or charts in a row share it when each gets 75 columns; stack otherwise | Tables and diagrams in a row sit side by side while their natural widths fit; stack otherwise |
 | Long blocks | Code cards past 24 lines cut there, with `▾ N more` | Code past 24 lines, tables past 14 rows and shell output past 8 + 4 lines fold behind `▾ N more` / `▴ less` |
 
-Every card has a Copy button (tables also `as text`, the table as drawn; a reply of several blocks ends in `copy reply`) and animates once, on first draw, respecting reduced motion. Only the
+Every card has a Copy button (tables also `as text`, the table as drawn; a paragraph of 300 characters or more is framed with its own Copy; clicks need `/tui fullscreen`) and animates once, on first draw, respecting reduced motion. Only the
 drawing changes: the stored conversation and what the model reads are untouched. Agents, plan mode
 and the permission prompt keep Claude Code's own drawing.
 
@@ -210,7 +210,7 @@ the README does not say.
 | Right-to-left text | No | **Hebrew and Arabic** | Hebrew and Arabic | | | No |
 | Usage meters | Context and plan limits above the prompt | | | | No | **Many widgets**, Powerline |
 | Spinner words | The skin's, with a shimmer | | | **Your own verbs and animations** | No | No |
-| Copy | Cards, tables as markdown or as drawn, `copy reply`, `/skin copy` | Buttons, `/prismantis copy`, HTML tables | Code, tables, diagrams, lists, quotes | | | No |
+| Copy | Cards, tables as markdown or as drawn, long paragraphs, `/skin copy` | Buttons, `/prismantis copy`, HTML tables | Code, tables, diagrams, lists, quotes | | | No |
 | API for other mods | `$.skins.markdown` | `$.prismantis.markdown` | | | | No |
 
 Where they are better: **tweakcc** recolours all of Claude Code, not only what a hook can

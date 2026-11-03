@@ -1,5 +1,6 @@
 import type { AlertType, Block, Line, Run, RunStyle, Task } from './blocks'
 import { safeHref, touchOf } from './links'
+import { copyButton, onBorder } from './rows'
 import type { Look } from './rows'
 import type { Palette } from './skin'
 
@@ -122,6 +123,30 @@ function taskRows(look: Look, items: readonly Task[]) {
   )
 }
 
+// A paragraph this long gets its own Copy button; shorter ones stay clean.
+const COPY_MIN = 300
+
+const plainText = (lines: readonly Line[]): string =>
+  lines.map(line => `${line.bullet === null ? '' : `${line.bullet} `}${line.runs.map(run => run.text).join('')}`).join('\n')
+
+// A long block framed like code, its Copy on the top border; unframed where nothing can copy.
+function copyFrame(look: Look, key: string, text: string, content: ReturnType<Look['ui']['Box']>) {
+  const { Box, Text } = look.ui
+  const control = copyButton(look, key, text)
+
+  if (control === undefined) {
+    return content
+  }
+
+  return onBorder(
+    look,
+    <Box flexDirection="column" borderStyle="round" borderColor={look.skin.palette.muted} paddingX={1}>
+      {content}
+    </Box>,
+    { label: <Text color={look.skin.palette.muted}>{' text '}</Text>, control },
+  )
+}
+
 // One row per block; paragraphs and headings sit a line apart, as markdown would set them.
 export function blockRows(look: Look, blocks: readonly Block[]) {
   const { Box, Markdown } = look.ui
@@ -131,19 +156,29 @@ export function blockRows(look: Look, blocks: readonly Block[]) {
 
     switch (block.kind) {
       case 'markdown':
-        return <Markdown text={block.text} />
+        return block.text.length >= COPY_MIN ? (
+          <Box flexDirection="column" marginTop={gap}>
+            {copyFrame(look, `copy-text-${i}`, block.text.trim(), <Markdown text={block.text} />)}
+          </Box>
+        ) : (
+          <Markdown text={block.text} />
+        )
       case 'heading':
         return <Box marginTop={gap}>{headingRow(look, block.level, block.text)}</Box>
       case 'alert':
         return <Box marginTop={gap}>{alertBox(look, block.type, block.body)}</Box>
       case 'tasks':
         return <Box marginTop={gap}>{taskRows(look, block.items)}</Box>
-      case 'paragraph':
+      case 'paragraph': {
+        const text = plainText(block.lines)
+        const lines = <Box flexDirection="column">{block.lines.map(line => lineRow(look, line))}</Box>
+
         return (
           <Box flexDirection="column" marginTop={blocks[i - 1]?.kind === 'heading' ? 0 : gap}>
-            {block.lines.map(line => lineRow(look, line))}
+            {text.length >= COPY_MIN ? copyFrame(look, `copy-text-${i}`, text, lines) : lines}
           </Box>
         )
+      }
     }
   })
 }

@@ -566,24 +566,29 @@ export function onBorder(
 
 // A Copy button padded to sit on a border line; nothing where nothing can copy.
 export function copyButton(look: Look, key: string, text: string, label = ' Copy ') {
-  const { Button } = look.ui
+  const { Button, Text } = look.ui
   const copy = look.copy
 
-  return copy === undefined ? undefined : <Button key={key} label={label} plain dimColor onPress={() => copy(text)} />
+  // Experiment: the label is a Text child so the skin's colours apply.
+  return copy === undefined ? undefined : (
+    <Button key={key} plain onPress={() => copy(text)}>
+      <Text color="#cba6f7" bold>{`⧉${label}`}</Text>
+    </Button>
+  )
 }
 
 // A small Copy button under a card or block, flush right; nothing where nothing can copy.
 export function copyRow(look: Look, key: string, text: string, label = 'Copy') {
-  const { Box, Button } = look.ui
-  const copy = look.copy
+  const { Box } = look.ui
+  const button = copyButton(look, key, text, ` ${label}`)
 
-  if (copy === undefined) {
+  if (button === undefined) {
     return ''
   }
 
   return (
     <Box flexDirection="row" justifyContent="flex-end">
-      <Button key={key} label={label} plain dimColor onPress={() => copy(text)} />
+      {button}
     </Box>
   )
 }

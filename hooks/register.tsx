@@ -1112,9 +1112,9 @@ reply width: ${lastColumns} columns`
     const base = await sessionLook($, e, lookOf(ui, active, e.surface, copy), replyNeeds(text, segments))
     const look = base.svg === undefined ? base : { ...base, isFirstDraw: await firstDraws($, e, prefs) }
 
-    // A reply of several blocks can be copied whole, as Claude wrote it.
+    // No whole-reply copy: each block's own Copy button copies just its contents.
     const columns = (e.viewport?.columns ?? 100) - (isFramed ? REPLY_FRAME_COLUMNS : 0)
-    const rows = replyRows(look, segments, columns, svg, segments.length > 1 ? text : undefined)
+    const rows = replyRows(look, segments, columns, svg)
 
     return withSettle($, e, isFramed ? replyFrame(look, rows, await modelName($, e.requestId)) : rows)
   })
