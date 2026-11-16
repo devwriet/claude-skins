@@ -146,12 +146,22 @@ try {
 return drawn ?? <Markdown text={text} />
 ```
 
+## Copy and your terminal
+
+The Copy buttons call Claude Code's own `$.ui.copy`; skins has no clipboard code. It uses the
+machine's clipboard tool (`pbcopy` on macOS, `wl-copy` or `xclip` on Linux, PowerShell on Windows,
+tmux's buffer) and falls back to OSC 52, an escape code the terminal must accept. Where only OSC 52
+is available, a terminal that drops it still shows "Copied". Clicks need `/tui fullscreen` in any
+terminal. Used in Ghostty on macOS; Windows terminals are untested.
+
 ## Compatibility
 
 Checked by hand on Windows (terminal and desktop app, 0.3.0) and run on Linux (terminal, 0.5.0,
-Claude Code 2.1.288, 168 engine tests). [CI](.github/workflows/ci.yml) runs the tests, the
-manifest checks and the type check on Linux, Windows and macOS. macOS, VS Code and mobile have
-not been looked at by hand. The surface × OS matrix and
+Claude Code 2.1.288, 168 engine tests). [CI](.github/workflows/ci.yml) runs the manifest checks and
+the engine tests on Linux, Windows and macOS against Claude Code 2.1.325; the Windows engine tests
+passed on 0.6.0. The type check runs only on builds up to 2.1.296, which still lay the API types on a
+print run, so it no longer blocks CI. CI draws the element tree; it does not click a button or touch
+a real clipboard. macOS, VS Code and mobile have not been looked at by hand. The surface × OS matrix and
 render times per row are in [docs/compat.md](docs/compat.md). To measure on your machine:
 
 ```bash
