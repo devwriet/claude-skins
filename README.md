@@ -168,6 +168,29 @@ render times per row are in [docs/compat.md](docs/compat.md). To measure on your
 scripts/bench.sh
 ```
 
+## Questions
+
+**Does the Copy button work in every terminal?**
+It needs `/tui fullscreen` for clicks, then it depends on the machine. Claude Code writes the text with the system clipboard tool (`pbcopy`, `wl-copy`, `xclip`, PowerShell, tmux's buffer) and falls back to OSC 52, which a terminal must accept. A terminal that drops OSC 52 still shows "Copied". Only Ghostty on macOS has been used by hand.
+
+**Does it work on Windows?**
+CI runs the engine tests on Windows and they pass (0.6.0, Claude Code 2.1.325). That draws the element tree; it does not click a button or write to the real Windows clipboard, so a hand check on a Windows terminal is still open.
+
+**I click Copy and nothing happens.**
+Run `/tui fullscreen` first. Without it the terminal sends no clicks. If the toast says "Could not copy here", the machine has no clipboard tool and the terminal gave no OSC 52 path.
+
+**Can I copy without clicking?**
+Yes. `/skin copy` copies Claude's last reply and `/skin copy code` copies just its last code block.
+
+**How do I remove the buttons?**
+`/skin copy off`. `/skin copy on` brings them back.
+
+**What does a code card's Copy put on the clipboard?**
+Only the code, without the fence or the language label. It copies every line, even past the 80 shown.
+
+**Why is CI's type check not blocking?**
+Claude Code stopped laying the API types on a print run after 2.1.296, so the type check cannot run on 2.1.325. The engine tests still run on all three systems.
+
 ## Known limitations
 
 | What | What you get instead | Where |
