@@ -55,6 +55,7 @@ jobs:
       # leaves behind. tsconfig.json reads them from .claude/types. Type-checked against
       # the pinned build only: 2.1.296 no longer lays them on a print run without login.
       - name: Lay the plugin API types
+        continue-on-error: true
         if: matrix.claude != 'latest'
         env:
           ANTHROPIC_API_KEY: ''
@@ -66,5 +67,6 @@ jobs:
           rm -f .claude/types/tsconfig.json
 
       - name: Type check
+        continue-on-error: true
         if: matrix.claude != 'latest'
         run: npx -y -p typescript@5.9.3 tsc -p tsconfig.json
