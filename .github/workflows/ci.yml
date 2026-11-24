@@ -47,6 +47,14 @@ jobs:
           claude plugin validate .
           claude plugin validate .claude-plugin/plugin.json
 
+      # The runner takes every test file under a folder, so a nested mod's tests would run
+      # against skins. Test it by itself, then take it away.
+      - name: idle-compact tests
+        run: |
+          claude plugin validate idle-compact
+          claude plugin test idle-compact
+          rm -rf idle-compact
+
       - name: Engine tests
         run: claude plugin test .
 

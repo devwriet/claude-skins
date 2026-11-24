@@ -10,6 +10,11 @@
       "name": "skins",
       "source": "./",
       "description": "Fork of claude-skins: tool-kind glyphs, User/Claude(model) chat boxes, per-model reply colors, mocha skin, edit diff card, always-moving spinner."
+    },
+    {
+      "name": "idle-compact",
+      "source": "./idle-compact",
+      "description": "Compacts the conversation after 55 idle minutes, before the 1-hour prompt cache expires."
     }
   ]
 }
