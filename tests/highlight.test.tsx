@@ -206,11 +206,18 @@ test('a fence on the terminal is drawn in the skin\u2019s colours, its language 
   expect(await ui.find({ key: 'copy-1' })).toBeDefined()
 })
 
-test('a fence in a language it does not know keeps Claude Code\u2019s markdown', async ($, on) => {
+test('an unknown language fence draws a framed plain row on the terminal', async ($, on) => {
   stub(on)
   const ui = await $.ui.mount({ ...SITE, surface: 'terminal', component: 'AssistantMessage', requestId: 'h2', props: { text: '```cobol\nDISPLAY "HI".\n```', isFirstOfReply: true } })
+  type Node = { props?: { borderStyle?: unknown }; children?: readonly Node[] }
+  const walk = (node: Node): Node[] => [node, ...(node.children ?? []).flatMap(walk)]
+  const nodes = walk((await ui.find({ type: 'Box' })) as Node)
 
-  expect(await ui.find({ type: 'Markdown' })).toBeDefined()
+  expect([
+    nodes.filter(node => node.props?.borderStyle === 'round').length,
+    await ui.find({ type: 'Text', text: ' cobol ' }) !== undefined,
+    await ui.find({ type: 'Text', text: 'DISPLAY "HI".' }) !== undefined,
+  ]).toEqual([2, true, true])
 })
 
 test('shell output is coloured in both cards, and plain with highlight off', async ($, on) => {

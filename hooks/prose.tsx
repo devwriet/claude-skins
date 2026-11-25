@@ -129,7 +129,7 @@ const COPY_MIN = 300
 const plainText = (lines: readonly Line[]): string =>
   lines.map(line => `${line.bullet === null ? '' : `${line.bullet} `}${line.runs.map(run => run.text).join('')}`).join('\n')
 
-// A long block framed like code, its Copy on the top border; unframed where nothing can copy.
+// A long block framed like code, with Copy above the frame; unframed where nothing can copy.
 function copyFrame(look: Look, key: string, text: string, content: ReturnType<Look['ui']['Box']>) {
   const { Box, Text } = look.ui
   const control = copyButton(look, key, text)

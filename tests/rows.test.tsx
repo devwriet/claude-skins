@@ -697,26 +697,75 @@ test('a table wider than its share spans the column instead of running off it', 
       requestId: 'r2',
       props: { text: wide, isFirstOfReply: true },
     })
-    type Node = { props?: { width?: unknown; position?: unknown; top?: unknown; borderStyle?: unknown }; children?: readonly Node[] }
+    type Node = { type?: string; props?: { width?: unknown; position?: unknown; top?: unknown; borderStyle?: unknown; flexDirection?: unknown }; children?: readonly Node[] }
     // Fork: a terminal reply sits in the name-and-box frame; the reply itself is the box's child.
     const outer = (await ui.find({ type: 'Box' })) as Node
     const reply = outer.children?.[1]?.children?.[0] as Node
     const frame = reply.children?.[0]
-    // Copy sits on the bordered box's top row, laid over it from the plain Box around it:
-    // inside the bordered box, Windows Terminal drew the border over it (#54).
-    const bordered = frame?.children?.[0]
-    const control = frame?.children?.at(-1)
+    // The header sits above the frame, so Windows Terminal cannot paint over Copy (#54).
+    const header = frame?.children?.[0]
+    const bordered = frame?.children?.[1]
+    const control = header?.children?.[0]?.children?.[0]
 
     expect(frame?.props?.width).toBe('100%')
     expect(bordered?.props?.borderStyle).toBe('round')
-    expect(bordered?.children?.some(child => child.props?.position === 'absolute')).toBe(false)
-    expect(control?.props?.position).toBe('absolute')
-    expect(control?.props?.top).toBe(0)
+    expect(control?.children?.[0]?.type).toBe('Button')
+    expect(header?.props?.flexDirection).toBe('row')
+    expect(header?.props?.justifyContent).toBe('flex-end')
     // The long cell wraps onto more lines instead of being cut.
     expect(await ui.find({ type: 'Text', text: /…$/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /^a long description/ })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('unknown and untagged terminal fences keep a frame and copy only fence contents', async ($, on) => {
+  stubEngine(on)
+  const copied: string[] = []
+  on('ui.copy', ($, e) => {
+    copied.push(e.text)
+    return { value: { isCopied: true } }
+  })
+  await runSkin($, 'highlight on')
+  const frames: number[] = []
+  const labels: boolean[] = []
+
+  for (const [requestId, text, expected] of [
+    ['unknown', '```text\nplain words\n```', 'plain words'],
+    ['untagged', '```\nplain words\n```', 'plain words'],
+  ] as const) {
+    const ui = await $.ui.mount({ ...SITE, surface: 'terminal', component: 'AssistantMessage', requestId, props: { text, isFirstOfReply: true } })
+    type Node = { type?: string; props?: Record<string, unknown>; children?: readonly Node[] }
+    const walk = (node: Node): Node[] => [node, ...(node.children ?? []).flatMap(walk)]
+    const nodes = walk((await ui.find({ type: 'Box' })) as Node)
+
+    frames.push(nodes.filter(node => node.props?.borderStyle === 'round').length)
+    labels.push((await ui.find({ type: 'Text', text: /text/ })) !== undefined)
+    await ui.press({ key: 'copy-0' })
+    expect(copied.at(-1)).toBe(expected)
+    await ui.unmount()
+  }
+
+  expect(frames).toEqual([2, 2])
+  expect(labels).toEqual([true, false])
+})
+
+test('terminal replies with code, table, long text and diff use no absolute boxes', async ($, on) => {
+  stubEngine(on)
+  const text = [
+    '```ts\nconst answer = 42\n```',
+    '```\nplain words\n```',
+    '| A | B |\n|---|---|\n| 1 | 2 |',
+    'Long paragraph. '.repeat(20),
+    '```diff\n-old\n+new\n```',
+  ].join('\n\n')
+  const ui = await $.ui.mount({ ...SITE, surface: 'terminal', component: 'AssistantMessage', requestId: 'no-absolute', props: { text, isFirstOfReply: true } })
+  type Node = { props?: { position?: unknown }; children?: readonly Node[] }
+  const walk = (node: Node): Node[] => [node, ...(node.children ?? []).flatMap(walk)]
+  const nodes = walk((await ui.find({ type: 'Box' })) as Node)
+
+  expect(nodes.some(node => node.props?.position === 'absolute')).toBe(false)
+  await ui.unmount()
 })
 
 test('a terminal table wraps sentence-length cells within their column and caps them with …', async ($, on) => {

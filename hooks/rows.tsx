@@ -28,7 +28,6 @@ import { terminalSvg } from './svg-terminal'
 import type { ShellOutput } from './svg-terminal'
 import { metersKey, usageLine, usageSvg } from './svg-usage'
 import { codeRows } from './code-rows'
-import { languageOf } from './highlight'
 import type { Meter } from './svg-usage'
 import { kindOf, toolLabel } from './tools'
 import { inlineMath, mathArt, parseTex } from './math'
@@ -395,8 +394,7 @@ const NATURAL_SHARE = 0.55
 const MAX_CELL_LINES = 6
 
 // A grid of cells, so columns line up in the terminal's monospace and in the desktop
-// app's proportional font alike. `control`, such as a Copy button, sits on the frame's
-// top border at the right, as ╭──── Copy ─╮.
+// app's proportional font alike. `control`, such as a Copy button, sits above the frame.
 // Past FOLD_ROWS rows it folds under `foldKey`.
 export function tableRows(look: Look, table: Table, maxWidth: number, control?: ReturnType<Ui['Button']>, foldKey = 'fold-table') {
   const { Box, Text } = look.ui
@@ -533,38 +531,35 @@ function mathRows(look: Look, tex: string, maxWidth: number, key: string) {
 const tableMarkdown = (table: Table): string =>
   [table.header, table.header.map(() => '---'), ...table.rows].map(cells => `| ${cells.join(' | ')} |`).join('\n')
 
-// A frame with a label and a control on its top border. They are laid over it from a plain
-// Box around the frame, not from inside it: inside a bordered Box, Windows Terminal drew the
-// border over them (#54). `box` sizes the plain Box the way the frame should sit.
+// The header stays in flow above the frame; absolute boxes at negative y jump to row zero.
+// Keeping it outside the bordered Box also avoids Windows Terminal painting over it (#54).
 export function onBorder(
   look: Look,
   frame: ReturnType<Ui['Box']>,
   parts: { label?: ReturnType<Ui['Text']>; control?: ReturnType<Ui['Button']> | ReturnType<Ui['Box']>; box?: Record<string, unknown> },
 ) {
-  const { Box } = look.ui
+  const { Box, Text } = look.ui
+
+  const header = parts.label === undefined && parts.control === undefined ? null : (
+    <Box flexDirection="row" justifyContent="flex-end" width="100%" paddingX={2}>
+      {parts.label === undefined ? null : (
+        <Box width={0} flexGrow={1} flexShrink={1} overflow="hidden">
+          <Text wrap="truncate-end">{parts.label}</Text>
+        </Box>
+      )}
+      {parts.control === undefined ? null : <Box flexShrink={0}>{parts.control}</Box>}
+    </Box>
+  )
 
   return (
     <Box flexDirection="column" {...parts.box}>
+      {header}
       {frame}
-      {parts.label === undefined ? (
-        ''
-      ) : (
-        <Box position="absolute" top={0} left={2}>
-          {parts.label}
-        </Box>
-      )}
-      {parts.control === undefined ? (
-        ''
-      ) : (
-        <Box position="absolute" top={0} right={2}>
-          {parts.control}
-        </Box>
-      )}
     </Box>
   )
 }
 
-// A Copy button padded to sit on a border line; nothing where nothing can copy.
+// A Copy button for an in-flow header or row; nothing where nothing can copy.
 export function copyButton(look: Look, key: string, text: string, label = ' Copy ') {
   const { Button, Text } = look.ui
   const copy = look.copy
@@ -650,8 +645,8 @@ function segmentRow(look: Look, segment: Segment, i: number, maxWidth: number, S
       )
     }
 
-    // The terminal highlights the languages it knows in the skin's colours.
-    if (look.surface === 'terminal' && look.prefs.highlight && languageOf(segment.lang) !== undefined) {
+    // The terminal frames every fence and highlights the languages it knows.
+    if (look.surface === 'terminal' && look.prefs.highlight) {
       return codeRows(look, segment.lang, segment.code, copyButton(look, `copy-${i}`, segment.code), `fold-${i}`)
     }
 

@@ -5,7 +5,7 @@ import { onBorder } from './rows'
 import type { Look, Ui } from './rows'
 
 // Code on the terminal in the skin's colours: a fenced block as a framed run of lines with
-// its language on the top border, and shell output with its paths, numbers and verdicts
+// its language above the frame, and shell output with its paths, numbers and verdicts
 // picked out. The roles come from highlight.ts.
 
 export function tokenSpans(look: Look, tokens: readonly Token[]) {
@@ -26,7 +26,7 @@ export function outputLine(look: Look, text: string) {
   return <Text wrap="truncate-end">{tokenSpans(look, outputTokens(text))}</Text>
 }
 
-// A fenced block: the language and a control (Copy) on the frame, then each line highlighted.
+// A fenced block: the language and control sit above the frame, then each line is highlighted.
 // Past FOLD_CODE lines it folds under `foldKey`.
 export function codeRows(look: Look, lang: string, code: string, control?: ReturnType<Ui['Button']>, foldKey = 'fold-code') {
   const { Box, Text } = look.ui
@@ -43,7 +43,7 @@ export function codeRows(look: Look, lang: string, code: string, control?: Retur
             <Text>{tokens.length === 0 || tokens.every(token => token.text === '') ? ' ' : tokenSpans(look, tokens)}</Text>
           ))}
         </Box>,
-        { label: <Text color={palette.muted}>{` ${lang} `}</Text>, control },
+        { label: lang === '' ? undefined : <Text color={palette.muted}>{` ${lang} `}</Text>, control },
       )}
       {foldButton(look, foldKey, lines.length, FOLD_CODE)}
     </Box>
