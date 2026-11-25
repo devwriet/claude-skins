@@ -29,6 +29,16 @@ function show($: any, text: string) {
   return writes
 }
 
+// What Claude asked smart-compact's summary to keep, while its offer is still unanswered.
+async function smartNote($: any): Promise<string | undefined> {
+  try {
+    const { value } = await $.state.get({ plugin: 'smart-compact', key: 'suggestion' })
+    if (typeof value?.instructions === 'string') return value.instructions
+  } catch {
+    // no note beats no compaction
+  }
+}
+
 async function arm($: any) {
   stop()
   const id = generation
@@ -37,14 +47,15 @@ async function arm($: any) {
   timer = $.clock.after(IDLE_MS, async () => {
     if (id !== generation) return
     try {
+      const instructions = await smartNote($) // first: the size and the clock below must not go stale behind it
       const { context } = await $.session.usage({ breakdown: 'summary' })
       if (id !== generation) return
       const tokens = context.breakdown?.totalTokens ?? context.tokens
       if (tokens === undefined || tokens < MIN_TOKENS) return
       const firedAt = await $.clock.now()
       if (id !== generation || submitting > 0) return
-      if (firedAt - endedAt >= CACHE_TTL_MS) return // the machine slept through the deadline
-      const r = await $.session.compact()
+      if (firedAt < endedAt || firedAt - endedAt >= CACHE_TTL_MS) return // slept through the deadline, or the clock moved back
+      const r = await $.session.compact(instructions ? { instructions } : undefined)
       if (id !== generation) return
       if ('skip' in r && r.skip) return
       const mins = Math.round((firedAt - endedAt) / 60000)
@@ -55,7 +66,7 @@ async function arm($: any) {
       // a turn started meanwhile: compact rejects while one runs, so do nothing
     }
   })
-  await show($, `armed ${Math.floor((endedAt + IDLE_MS) / 1000)}`)
+  void show($, `armed ${Math.floor((endedAt + IDLE_MS) / 1000)}`)
 }
 
 export const register: Register = on => {
@@ -72,7 +83,7 @@ export const register: Register = on => {
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
       stop()
-      await show($, ACTIVE)
+      void show($, ACTIVE)
     }
     return next(e)
   })

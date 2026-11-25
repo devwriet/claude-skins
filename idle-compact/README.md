@@ -22,7 +22,11 @@ Open sessions pick it up after a restart. Tested on Claude Code 2.1.331.
 - The countdown starts when a turn ends. A new turn cancels it. Subagent turns do not count.
 - At 55 minutes it compacts if the context holds at least 100K tokens, and a toast says how long you were idle.
 - If an hour has passed since the turn ended (the machine slept), it does nothing: the cache is gone.
+  The same if the clock moved back past the turn's end.
 - Every session has its own countdown.
+- With [smart-compact](https://github.com/hellosverre/smart-compact) (tested with 0.3.2): if Claude asked to compact
+  and the offer is still unanswered, the summary keeps what Claude asked for. After "Not now" it compacts plainly.
+  The offer stays on screen until your next prompt. Do not press it then: it compacts a second time.
 
 It assumes the 1-hour prompt cache. Check `/usage` first: on the 5-minute cache, 55 minutes is too late.
 Claude Code's own idle compaction covers contexts over 200K. This mod covers 100K to 200K, and the times
@@ -64,7 +68,8 @@ fi
 if [[ -n "$ic_text" ]]; then printf '%b\n' "$ic_text"; fi
 ```
 
-It hides below about 100K tokens, where nothing would compact.
+It hides when the last request held less than about 100K tokens. The mod checks the current size, so near 100K
+it can still compact while the countdown is hidden.
 
 | Time left | Style |
 |---|---|

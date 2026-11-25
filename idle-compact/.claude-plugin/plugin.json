@@ -1,6 +1,6 @@
 {
   "name": "idle-compact",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Compacts the conversation after 55 idle minutes, before the 1-hour prompt cache expires.",
   "author": {
     "name": "devwriet"

@@ -10,29 +10,37 @@ async function setup(on: any, tokens: number, ok = false, options: any = {}) {
       ? on(event, () => ({ value: clock.now() + (clock.now() > 0 ? options.slept : 0) }))
       : on(event, ...rest)) as any)
   let compacted = 0
+  const notes: unknown[] = []
   on('session.usage', async ($: any) => {
     await options.onUsage?.($)
     return { value: { startedAt: 0, rateLimits: [], context: { tokens, window: 200000, breakdown: { totalTokens: options.breakdownTokens ?? tokens } } } }
   })
   on('session.compact', async (_: any, e: any) => {
     compacted++
+    notes.push(e.instructions)
     return ok ? { messages: [{ role: 'user', text: 'summary', toolUses: [] }] } : { skip: 'test' }
   })
   const shown: string[] = []
   on('ui.toast', (_: any, e: any) => (shown.push('toast:' + e.text), { value: undefined }))
+  // what smart-compact's open offer holds
+  on('state.get', async (_: any, e: any) => {
+    await options.onState?.()
+    if (options.stateFails) return { deny: 'no state' } // a throw here would only skip this hook
+    return { value: { value: e.plugin === 'smart-compact' && e.key === 'suggestion' ? options.offer : undefined, version: 1 } }
+  })
   mock.env(on, options.noHome ? {} : { HOME: '/home/me' })
   on('session.id', () => ({ value: 'sid' }))
   on('ui.status', (_: any, e: any) => (shown.push('status:' + e.text), { value: undefined }))
   on('fs.write', async (_: any, e: any) => {
     await options.onWrite?.(e.text)
-    if (options.writeFails) throw new Error('disk full')
+    if (options.writeFails) return { deny: 'disk full' }
     shown.push(e.path.replace(/^[A-Za-z]:/, '').replaceAll('\\', '/') + ':' + e.text) // Windows paths too
     return { value: undefined }
   })
   on('turn.complete', () => ({ text: '' }))
   on('turn.start', (_: any, e: any) => e)
   on('prompt.submit', async (_: any, e: any) => (await options.onPrompt?.(), options.dropPrompt) ? { drop: 'test' } : { text: e.text })
-  return { clock, count: () => compacted, shown }
+  return { clock, count: () => compacted, shown, notes }
 }
 
 test('compacts after 55 min idle when context is big', async ($, on) => {
@@ -213,13 +221,16 @@ test('the status file holds the deadline, and a new turn marks it active', async
   const deadline = () => FILE + 'armed ' + (clock.now() + 55 * MIN) / 1000
   // @ts-ignore
   await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
+  await clock.settle()
   expect(shown.at(-1)).toBe(deadline())
   // @ts-ignore
   await $.turn.start?.({ turnId: 't1' })
+  await clock.settle()
   expect(shown.at(-1)).toBe(FILE + 'active 55')
   await clock.advance(10 * MIN)
   // @ts-ignore
   await $.turn.complete?.({ reason: 'end_turn', answer: 'y' })
+  await clock.settle()
   expect(shown.at(-1)).toBe(deadline())
 })
 
@@ -232,20 +243,27 @@ test('a slow old write cannot land after a newer one', async ($, on) => {
   await clock.settle()
   // @ts-ignore
   const started = $.turn.start?.({ turnId: 't1' })
+  let turnsDone = false
+  void Promise.all([ended, started]).then(() => { turnsDone = true })
   await clock.settle()
+  const doneBeforeWrite = turnsDone // a slow disk must not hold up either turn
   release()
   await Promise.all([ended, started])
+  expect(doneBeforeWrite).toBe(true)
+  await clock.settle()
   expect(shown.at(-1)).toBe(FILE + 'active 55')
 })
 
 test('one failed write does not stop the next one', async ($, on) => {
   const options = { writeFails: true }
-  const { shown } = await setup(on, 150_000, true, options)
+  const { clock, shown } = await setup(on, 150_000, true, options)
   // @ts-ignore
   await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
+  await clock.settle()
   options.writeFails = false
   // @ts-ignore
   await $.turn.start?.({ turnId: 't1' })
+  await clock.settle()
   expect(shown).toEqual([FILE + 'active 55'])
 })
 
@@ -267,11 +285,93 @@ test('a failing status write does not stop the compaction', async ($, on) => {
   expect(shown).toContain('toast:idle-compact: compacted after 55 min idle (150K tokens)')
 })
 
-for (const [slept, want] of [[4, 1], [5, 0], [120, 0]] as const)
-  test(`a timer that fires ${slept} min late ${want ? 'still compacts' : 'finds the cache gone and does not compact'}`, async ($, on) => {
+for (const [slept, want] of [[4, 1], [5, 0], [120, 0], [-56, 0]] as const)
+  test(`a timer that fires ${slept} min late ${want ? 'still compacts' : 'does not compact'}`, async ($, on) => {
     const { clock, count } = await setup(on, 150_000, true, { slept: slept * MIN })
     // @ts-ignore
     await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
     await clock.advance(56 * MIN)
     expect(count()).toBe(want)
   })
+
+for (const [name, offer, want] of [
+  ['an unanswered request with a note', { source: 'claude', reason: 'done', instructions: 'keep the TODOs', percent: 70 }, 'keep the TODOs'],
+  ['a request without a note', { source: 'claude', reason: 'done', percent: 70 }, undefined],
+  ['a note that is not text', { source: 'claude', instructions: { a: 1 } }, undefined],
+  ['an answered offer', null, undefined],
+  ['smart-compact not installed', undefined, undefined],
+] as const)
+  test(`smart-compact: ${name} compacts ${want ? 'with the note' : 'plainly'}`, async ($, on) => {
+    const { clock, notes } = await setup(on, 150_000, true, { offer })
+    // @ts-ignore
+    await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
+    await clock.advance(56 * MIN)
+    expect(notes).toEqual([want])
+  })
+
+test('smart-compact: the note is read at the deadline, not when the turn ended', async ($, on) => {
+  const options: any = { offer: { source: 'claude', instructions: 'old' } }
+  const { clock, notes } = await setup(on, 150_000, true, options)
+  // @ts-ignore
+  await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
+  await clock.advance(30 * MIN)
+  options.offer = null // the person pressed "Not now"
+  await clock.advance(26 * MIN)
+  expect(notes).toEqual([undefined])
+})
+
+test('smart-compact: a failing read of the note does not stop the compaction', async ($, on) => {
+  const { clock, notes } = await setup(on, 150_000, true, { stateFails: true })
+  // @ts-ignore
+  await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
+  await clock.advance(56 * MIN)
+  expect(notes).toEqual([undefined])
+})
+
+test('a turn that starts while the timer awaits the note prevents compaction', async ($, on) => {
+  let release: () => void = () => {}
+  const gate = new Promise<void>(r => (release = r))
+  let entered: () => void = () => {}
+  const inState = new Promise<void>(r => (entered = r))
+  const { clock, count } = await setup(on, 150_000, true, { onState: () => (entered(), gate) })
+  // @ts-ignore
+  await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
+  const fired = clock.advance(56 * MIN)
+  await inState
+  // @ts-ignore
+  await $.turn.start?.({ turnId: 't1' })
+  release()
+  await fired
+  expect(count()).toBe(0)
+})
+
+test('cache expiry during a smart-compact note read prevents compaction', async ($, on) => {
+  const options = { slept: 1, onState: () => { options.slept = 5 * MIN } }
+  const { clock, count } = await setup(on, 150_000, true, options)
+  // @ts-ignore
+  await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
+  await clock.advance(55 * MIN)
+  expect(count()).toBe(0)
+})
+
+test('another successful compact invalidates the idle usage snapshot', async ($, on) => {
+  let entered!: () => void
+  let release!: () => void
+  const reading = new Promise<void>(resolve => { entered = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const options = { onState: () => { entered(); return gate }, breakdownTokens: 150_000 }
+  const { clock, notes } = await setup(on, 150_000, true, options)
+  // @ts-ignore
+  await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
+  const firing = clock.advance(55 * MIN)
+  await reading
+  await $.session.compact({
+    trigger: 'plugin',
+    messages: [{ role: 'user', text: 'prior context', toolUses: [] }],
+    instructions: 'other compact',
+  })
+  options.breakdownTokens = 10_000
+  release()
+  await firing
+  expect(notes).toEqual(['other compact'])
+})
