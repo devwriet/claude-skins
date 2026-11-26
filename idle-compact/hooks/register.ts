@@ -2,7 +2,7 @@ import type { Register, Timer } from 'claude-code'
 
 const IDLE_MS = 55 * 60 * 1000 // backstop: native idle compaction fires ~54 min, so only act if it missed
 const CACHE_TTL_MS = 60 * 60 * 1000 // past this the cache is gone and compacting re-reads everything at full price
-const MIN_TOKENS = 100_000 // native's own floor; below this a compaction is not worth the call
+const MIN_TOKENS = 50_000 // below this a compaction saves less than it throws away
 
 const ACTIVE = `active ${IDLE_MS / 60_000}` // status text while a turn runs
 

@@ -67,23 +67,23 @@ test('a prompt and its turn inside the window cancel it', async ($, on) => {
 })
 
 test('small context is left alone', async ($, on) => {
-  const { clock, count } = await setup(on, 50_000)
+  const { clock, count } = await setup(on, 20_000)
   // @ts-ignore
   await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
   await clock.advance(60 * MIN)
   expect(count()).toBe(0)
 })
 
-test('compacts at exactly 100,000 tokens', async ($, on) => {
-  const { clock, count } = await setup(on, 100_000, true)
+test('compacts at exactly 50,000 tokens', async ($, on) => {
+  const { clock, count } = await setup(on, 50_000, true)
   // @ts-ignore
   await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
   await clock.advance(56 * MIN)
   expect(count()).toBe(1)
 })
 
-test('does not compact at 99,999 tokens', async ($, on) => {
-  const { clock, count } = await setup(on, 99_999, true)
+test('does not compact at 49,999 tokens', async ($, on) => {
+  const { clock, count } = await setup(on, 49_999, true)
   // @ts-ignore
   await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
   await clock.advance(56 * MIN)
@@ -209,7 +209,7 @@ test('a reload mid-idle re-arms the countdown', async ($, on) => {
 })
 
 test('the gate reads the current breakdown, not the stale last-request count', async ($, on) => {
-  const { clock, count } = await setup(on, 50_000, false, { breakdownTokens: 150_000 })
+  const { clock, count } = await setup(on, 20_000, false, { breakdownTokens: 150_000 })
   // @ts-ignore
   await $.turn.complete?.({ reason: 'end_turn', answer: 'x' })
   await clock.advance(56 * MIN)
